@@ -719,7 +719,7 @@ function act(k,ds){
 }
 
 reset(); render();
-document.addEventListener("validacion:rol",e=>{const m={"Dueño":"owner","Amigo (Ana)":"friend","Sin cuenta":"guest"};S.role=m[e.detail.rol]||S.role;reset(true);render();});
+document.addEventListener("validacion:rol",e=>{const m={"Dueño":"owner","Amigo (Ana)":"friend","Sin cuenta":"guest"};S.role=m[e.detail.rol]||S.role;S.mode="visual";S.hu=false;reset(true);render();});
 </script>
 <script src="tareas.js?v=2"></script>
 <script src="kit/validacion.js?v=3.14.0"></script>
