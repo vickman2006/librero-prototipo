@@ -127,7 +127,7 @@
   .gris .nav .dot{background:#333}
   .gris .sk{background:#e2e2e2;animation:none}
 </style>
-<link rel="stylesheet" href="kit/validacion.css">
+<link rel="stylesheet" href="kit/validacion.css?v=3.14.0">
 </head>
 <body>
 <div class="proto" data-solo-autor role="region" aria-label="Controles del prototipo">
@@ -721,7 +721,7 @@ function act(k,ds){
 reset(); render();
 document.addEventListener("validacion:rol",e=>{const m={"Dueño":"owner","Amigo (Ana)":"friend","Sin cuenta":"guest"};S.role=m[e.detail.rol]||S.role;reset(true);render();});
 </script>
-<script src="tareas.js"></script>
-<script src="kit/validacion.js"></script>
+<script src="tareas.js?v=2"></script>
+<script src="kit/validacion.js?v=3.14.0"></script>
 </body>
 </html>
