@@ -9,6 +9,8 @@
  *        <link rel="stylesheet" href="kit/validacion.css">   (en el <head>)
  *        <script src="tareas.js"></script>
  *        <script src="kit/validacion.js"></script>
+ *      En un hosting, agrega ?v=<n> a esas tres rutas y súbelo al cambiar tareas.js o el kit: el navegador guarda
+ *      la versión anterior unos minutos y quien prueba vería tareas o textos viejos.
  *   2. tareas.js define window.TAREAS (un .js y no un .json: así funciona también con doble clic, sin servidor):
  *        window.TAREAS = {
  *          prototipo: "Nombre del producto",                    // opcional
