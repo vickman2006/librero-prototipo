@@ -49,6 +49,7 @@
   try { hash = decodeURIComponent((location.hash || '').slice(1)); } catch (e) { hash = ''; }
   if (params.has('autor') || hash === 'autor') return;
   var rolUrl = params.get('rol') || (hash.indexOf('rol-') === 0 ? hash.slice(4) : null);
+  var ignorarRolUrl = false; // tras «Probar con otro rol», la persona elige en la bienvenida
 
   var CLAVE = 'validacion:' + location.pathname.replace(/[^\/]*$/, '');
   var RESULTADOS = { si: 'Sí', dificultad: 'Con dificultad', no: 'No' };
@@ -119,6 +120,14 @@
   function duracion(ms) {
     var s = Math.max(0, Math.round(ms / 1000)), m = Math.floor(s / 60);
     return m ? m + ' min ' + (s % 60) + ' s' : s + ' s';
+  }
+  // Compara roles sin acentos ni mayúsculas, y acepta «ni» por «ñ» (#rol-duenio = «Dueño»).
+  function clave(s) { return slug(s).replace(/ni/g, 'n'); }
+  function rolPedido() {
+    if (!rolUrl || ignorarRolUrl) return null;
+    var f = null;
+    roles().forEach(function (x) { if (x === rolUrl || clave(x) === clave(rolUrl)) f = x; });
+    return f;
   }
   function slug(s) {
     return String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'rol';
@@ -224,8 +233,7 @@
 
   // ---------- vistas ----------
   function vistaBienvenida() {
-    var rs = roles(), fijo = null;
-    if (rolUrl) rs.forEach(function (x) { if (x === rolUrl || slug(x) === slug(rolUrl)) fijo = x; });
+    var rs = roles(), fijo = rolPedido();
     if (fijo) st.rol = fijo;
     else if (rs.length === 1) st.rol = rs[0];
     var elegir = !fijo && rs.length > 1;
@@ -259,7 +267,9 @@
     var ts = tareasRol(), t = tareaActual(), cuerpo = '', titulo = 'Prueba · ' + esc(st.rol);
     if (st.fase === 'tarea' && t) {
       titulo = 'Tarea ' + (st.i + 1) + ' de ' + ts.length;
-      cuerpo = (t.hu ? '<p class="vk-etq">' + esc(t.hu) + '</p>' : '') + '<p class="vk-texto">' + esc(t.texto) + '</p>' +
+      var otro = rolPedido();
+      cuerpo = (otro && otro !== st.rol ? '<p class="vk-aviso">Estás probando como ' + esc(st.rol) + '. Para cambiar a ' + esc(otro) + ', termina esta prueba.</p>' : '') +
+        (t.hu ? '<p class="vk-etq">' + esc(t.hu) + '</p>' : '') + '<p class="vk-texto">' + esc(t.texto) + '</p>' +
         '<div class="vk-acciones"><button type="button" class="vk-btn vk-pri" data-vk="termine">Terminé</button>' +
         '<button type="button" class="vk-btn" data-vk="nopude">No pude</button></div>' +
         '<details class="vk-mas"><summary>Tu rol: ' + esc(st.rol) + '</summary><p>' + esc(ficha(st.rol)) + '</p></details>';
@@ -291,8 +301,11 @@
         '<button type="button" class="vk-btn" data-vk="copiar">Copiar resultados</button></div>' +
         (aviso ? '<p class="vk-aviso" role="status">' + esc(aviso) + '</p>' : '') +
         '<details class="vk-mas"><summary>Ver resultados</summary><textarea class="vk-salida" rows="8" readonly>' + esc(markdown()) + '</textarea></details>' +
-        '<p class="vk-reinicio"><button type="button" class="vk-enlace" data-vk="reiniciar">' +
-        (confirmarReinicio ? '¿Seguro? Se borran tus respuestas. Confirmar' : 'Empezar de nuevo') + '</button></p>';
+        (rolPedido() && rolPedido() !== st.rol ? '<p class="vk-aviso">Para probar como ' + esc(rolPedido()) + ', copia antes tus resultados si no se enviaron y pulsa «Probar con otro rol».</p>' : '') +
+        '<p class="vk-reinicio"><button type="button" class="vk-btn" data-vk="reiniciar">' +
+        (confirmarReinicio
+          ? (ENVIAR && st.enviados && !st.pend.length ? 'Tus respuestas ya se enviaron. Confirmar' : '¿Copiaste tus resultados? Se borran de este navegador. Confirmar')
+          : 'Probar con otro rol') + '</button></p>';
     }
     return '<aside class="vk-panel' + (st.min ? ' vk-min' : '') + '" aria-label="Prueba del prototipo">' + cabecera(titulo) +
       (st.min ? '' : '<div class="vk-cuerpo">' + cuerpo + '</div>') +
@@ -386,7 +399,7 @@
       case 'copiar': copiar(); return;
       case 'reiniciar':
         if (!confirmarReinicio) { confirmarReinicio = true; break; }
-        confirmarReinicio = false; st = nuevo();
+        confirmarReinicio = false; st = nuevo(); ignorarRolUrl = true;
         try { localStorage.removeItem(CLAVE); } catch (e) { /* nada */ }
         pintar(); return;
       case 'anotar':
@@ -432,6 +445,9 @@
     if (st.v !== 1) st = nuevo();
     if (!Array.isArray(st.pend)) st.pend = [];
     if (st.fase !== 'bienvenida' && !st.sesion) st.sesion = idSesion();
+    // Un enlace con otro rol abre una prueba nueva si la anterior terminó y sus respuestas ya se enviaron.
+    var pedido = rolPedido();
+    if (pedido && st.rol && pedido !== st.rol && st.fase === 'fin' && ENVIAR && st.enviados && !st.pend.length) { st = nuevo(); guardar(); }
 
     raiz.addEventListener('click', function (e) {
       var b = e.target.closest('[data-vk]');
@@ -457,6 +473,11 @@
     pintar(st.fase !== 'bienvenida');
     vaciar();
     window.addEventListener('online', vaciar);
+    // Cambiar solo el #rol-… no recarga la página: se recarga para aplicarlo.
+    window.addEventListener('hashchange', function () {
+      var h = ''; try { h = decodeURIComponent(location.hash.slice(1)); } catch (e) { h = ''; }
+      if (h === 'autor' || h.indexOf('rol-') === 0) location.reload();
+    });
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar);
