@@ -35,7 +35,7 @@ html.vk-lado body { margin-right: 340px !important; }
 
 /* Panel lateral (abajo en pantallas angostas). */
 .vk-panel {
-  position: fixed; z-index: 2147483000; right: 12px; top: 12px; bottom: 12px; width: 316px;
+  position: fixed; z-index: 2147483000; right: 12px; top: 12px; width: 316px; max-height: calc(100vh - 24px);
   display: flex; flex-direction: column;
   background: var(--vk-fondo); border: 1px solid var(--vk-borde); border-radius: 12px;
   box-shadow: 0 8px 28px rgba(0, 0, 0, .18);
