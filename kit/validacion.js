@@ -31,8 +31,10 @@
  *        window.TAREAS = { …, prueba: "librero-ronda-3",            // separa pruebas en el mismo receptor
  *          enviar: "https://…",                                       // receptor que acepta POST (ver receptor-google.gs)
  *          enviarA: "una hoja de cálculo del equipo" };               // lo que lee quien prueba en la bienvenida
- *      Cada evento (inicio, tarea, nota, cierre) se envía al ocurrir, con reintentos; «Copiar resultados» sigue
- *      como respaldo. Una página de claude.ai no puede enviar (bloquea otros dominios): usa un hosting estático.
+ *      Cada evento (inicio, tarea, nota, cierre) se envía al ocurrir. El receptor responde el texto «ok» después
+ *      de guardar y permite leer la respuesta (CORS; Apps Script lo hace): solo entonces cuenta como enviado.
+ *      Si no, se reintenta; tras 3 fallos, la pantalla final ofrece copiar los resultados. Una página de
+ *      claude.ai no puede enviar (bloquea otros dominios): usa un hosting estático.
  *
  * Qué registra: el rol elegido y las respuestas (resultado, facilidad 1–7, tiempo y notas por tarea;
  * anotaciones con tarea, pantalla y estado; un comentario final) y un id de sesión aleatorio. Sin capturas
@@ -56,7 +58,7 @@
   var TIPOS = { problema: 'Problema', comentario: 'Comentario', duda: 'Duda' };
   var datos = window.TAREAS;
   var ENVIAR = datos && typeof datos.enviar === 'string' && /^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)[:\/])/.test(datos.enviar) ? datos.enviar : '';
-  var raiz, st, nota = null, aviso = '', confirmarReinicio = false, enviando = false, falloEnvio = false;
+  var raiz, st, nota = null, aviso = '', confirmarReinicio = false, enviando = false, falloEnvio = false, fallos = 0, reintento = null;
 
   // ---------- utilidades ----------
   function esc(s) {
@@ -95,22 +97,29 @@
     if (!ENVIAR || enviando || !st.pend || !st.pend.length) return;
     enviando = true;
     var lote = st.pend.slice(0, 20);
-    // text/plain y no-cors: sin preflight de CORS (Apps Script no lo responde). La respuesta es opaca:
-    // «enviado» significa que salió sin error de red.
-    fetch(ENVIAR, { method: 'POST', mode: 'no-cors', keepalive: true,
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ eventos: lote }) })
-      .then(function () {
+    // text/plain: sin preflight de CORS. El receptor responde «ok» solo después de guardar, y permite leer la
+    // respuesta (Apps Script lo hace): solo así un evento cuenta como enviado. Si no, se reintenta.
+    fetch(ENVIAR, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ eventos: lote }) })
+      .then(function (res) { return res.ok ? res.text() : Promise.reject(new Error('http ' + res.status)); })
+      .then(function (txt) {
+        if (String(txt).trim() !== 'ok') throw new Error('respuesta: ' + String(txt).slice(0, 60));
         st.pend = st.pend.slice(lote.length); st.enviados = (st.enviados || 0) + lote.length;
-        enviando = false; falloEnvio = false; guardar(); mostrarEnvio();
+        enviando = false; falloEnvio = false; fallos = 0; guardar(); mostrarEnvio();
         if (st.pend.length) vaciar();
-      }, function () { enviando = false; falloEnvio = true; mostrarEnvio(); });
+      })
+      .catch(function () {
+        enviando = false; falloEnvio = true; fallos++; mostrarEnvio();
+        clearTimeout(reintento);
+        reintento = setTimeout(vaciar, Math.min(30000, 2000 * Math.pow(2, fallos)));
+      });
   }
   function textoEnvio() {
     if (!ENVIAR || !st || !st.sesion) return '';
     if (st.pend && st.pend.length) return falloEnvio ? 'Sin conexión: se reintentará' : 'Enviando…';
-    return st.enviados ? 'Respuestas enviadas' : '';
+    return st.enviados ? 'Comentarios enviados' : '';
   }
   function mostrarEnvio() {
+    if (st && st.fase === 'fin' && raiz) { pintar(true); return; }
     var els = raiz ? raiz.querySelectorAll('.vk-envio') : [];
     for (var k = 0; k < els.length; k++) els[k].textContent = textoEnvio();
   }
@@ -263,6 +272,13 @@
       '<button type="button" class="vk-icono" data-vk="min" aria-label="' + (st.min ? 'Mostrar el panel' : 'Minimizar el panel') + '">' + (st.min ? '▴' : '▾') + '</button></header>';
   }
 
+  function sinPerdida() { return ENVIAR && st.enviados && !st.pend.length; }
+  function botonRol() {
+    return '<p class="vk-reinicio"><button type="button" class="vk-btn" data-vk="reiniciar">' +
+      (confirmarReinicio
+        ? (sinPerdida() ? 'Lo que respondiste ya se envió. Confirmar' : '¿Seguro? Se borra lo que respondiste en este navegador. Confirmar')
+        : 'Probar con otro rol') + '</button></p>';
+  }
   function vistaPanel() {
     var ts = tareasRol(), t = tareaActual(), cuerpo = '', titulo = 'Prueba · ' + esc(st.rol);
     if (st.fase === 'tarea' && t) {
@@ -272,7 +288,10 @@
         (t.hu ? '<p class="vk-etq">' + esc(t.hu) + '</p>' : '') + '<p class="vk-texto">' + esc(t.texto) + '</p>' +
         '<div class="vk-acciones"><button type="button" class="vk-btn vk-pri" data-vk="termine">Terminé</button>' +
         '<button type="button" class="vk-btn" data-vk="nopude">No pude</button></div>' +
-        '<details class="vk-mas"><summary>Tu rol: ' + esc(st.rol) + '</summary><p>' + esc(ficha(st.rol)) + '</p></details>';
+        '<details class="vk-mas"' + (confirmarReinicio ? ' open' : '') + '><summary>Tu rol: ' + esc(st.rol) + '</summary><p>' + esc(ficha(st.rol)) + '</p>' +
+        '<p><button type="button" class="vk-enlace" data-vk="reiniciar">' +
+        (confirmarReinicio ? (sinPerdida() ? 'Lo que respondiste ya se envió. Confirmar cambio de rol' : '¿Seguro? Se borra lo que respondiste en este navegador. Confirmar') : 'Cambiar de rol') +
+        '</button></p></details>';
     } else if (st.fase === 'evaluar' && t) {
       var r = st.res[t.id] || {};
       titulo = 'Tarea ' + (st.i + 1) + ' de ' + ts.length;
@@ -293,25 +312,28 @@
         '<div class="vk-acciones"><button type="button" class="vk-btn vk-pri" data-vk="terminar">Terminar</button></div>';
     } else if (st.fase === 'fin') {
       titulo = '¡Gracias!';
-      cuerpo = (ENVIAR
-          ? '<p>Tus respuestas ya se enviaron a ' + esc(datos.enviarA || 'quien te invitó') + '. Si quien te invitó no las recibe, copia los resultados y mándaselos.</p>'
-          : '<p>Copia o descarga tus resultados y envíaselos a quien te invitó.</p>') +
-        (ENVIAR ? '<p class="vk-envio vk-ok" role="status">' + esc(textoEnvio()) + '</p>' : '') +
-        '<div class="vk-acciones vk-col"><button type="button" class="vk-btn vk-pri" data-vk="descargar">Descargar resultados</button>' +
-        '<button type="button" class="vk-btn" data-vk="copiar">Copiar resultados</button></div>' +
-        (aviso ? '<p class="vk-aviso" role="status">' + esc(aviso) + '</p>' : '') +
-        '<details class="vk-mas"><summary>Ver resultados</summary><textarea class="vk-salida" rows="8" readonly>' + esc(markdown()) + '</textarea></details>' +
-        (rolPedido() && rolPedido() !== st.rol ? '<p class="vk-aviso">Para probar como ' + esc(rolPedido()) + ', copia antes tus resultados si no se enviaron y pulsa «Probar con otro rol».</p>' : '') +
-        '<p class="vk-reinicio"><button type="button" class="vk-btn" data-vk="reiniciar">' +
-        (confirmarReinicio
-          ? (ENVIAR && st.enviados && !st.pend.length ? 'Tus respuestas ya se enviaron. Confirmar' : '¿Copiaste tus resultados? Se borran de este navegador. Confirmar')
-          : 'Probar con otro rol') + '</button></p>';
+      var enviadoTodo = ENVIAR && st.enviados && !st.pend.length;
+      if (ENVIAR && enviadoTodo) {
+        // Confirmado por el receptor: solo el mensaje y el cambio de rol.
+        cuerpo = '<p class="vk-texto">Tus comentarios fueron enviados. ¡Gracias por ayudarnos!</p>' + botonRol();
+      } else if (ENVIAR && fallos < 3) {
+        cuerpo = '<p class="vk-texto">Enviando tus comentarios…</p><p class="vk-sub">No cierres esta página todavía.</p>';
+      } else {
+        cuerpo = (ENVIAR
+            ? '<p>No pudimos enviar tus comentarios. Copia los resultados y mándaselos a quien te invitó. Seguiremos intentando mientras la página esté abierta.</p>'
+            : '<p>Copia o descarga tus resultados y envíaselos a quien te invitó.</p>') +
+          '<div class="vk-acciones vk-col">' + (ENVIAR ? '' : '<button type="button" class="vk-btn vk-pri" data-vk="descargar">Descargar resultados</button>') +
+          '<button type="button" class="vk-btn' + (ENVIAR ? ' vk-pri' : '') + '" data-vk="copiar">Copiar resultados</button></div>' +
+          (aviso ? '<p class="vk-aviso" role="status">' + esc(aviso) + '</p>' : '') +
+          '<details class="vk-mas"><summary>Ver resultados</summary><textarea class="vk-salida" rows="8" readonly>' + esc(markdown()) + '</textarea></details>' +
+          botonRol();
+      }
     }
     return '<aside class="vk-panel' + (st.min ? ' vk-min' : '') + '" aria-label="Prueba del prototipo">' + cabecera(titulo) +
       (st.min ? '' : '<div class="vk-cuerpo">' + cuerpo + '</div>') +
-      '<footer class="vk-pie"><button type="button" class="vk-btn vk-anotar" data-vk="anotar">✎ Anotar</button>' +
+      (st.fase === 'fin' ? '</aside>' : '<footer class="vk-pie"><button type="button" class="vk-btn vk-anotar" data-vk="anotar">✎ Anotar</button>' +
       (ENVIAR && st.fase !== 'fin' ? '<span class="vk-envio vk-sub" role="status">' + esc(textoEnvio()) + '</span>' : '') +
-      (aviso && st.fase !== 'evaluar' && st.fase !== 'fin' ? '<span class="vk-ok" role="status">' + esc(aviso) + '</span>' : '') + '</footer></aside>';
+      (aviso && st.fase !== 'evaluar' && st.fase !== 'fin' ? '<span class="vk-ok" role="status">' + esc(aviso) + '</span>' : '') + '</footer></aside>');
   }
 
   function vistaNota() {
@@ -398,7 +420,7 @@
       case 'descargar': descargar(); return;
       case 'copiar': copiar(); return;
       case 'reiniciar':
-        if (!confirmarReinicio) { confirmarReinicio = true; break; }
+        if (!confirmarReinicio && !(st.fase === 'fin' && sinPerdida())) { confirmarReinicio = true; break; }
         confirmarReinicio = false; st = nuevo(); ignorarRolUrl = true;
         try { localStorage.removeItem(CLAVE); } catch (e) { /* nada */ }
         pintar(); return;
