@@ -1,0 +1,727 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prototipo · Librero</title>
+<!--
+  Prototipo navegable (Fase 0.2). HTML estático, sin dependencias, sin lógica real.
+  Datos fijos en memoria: se reinician al recargar. "Hoy" es el 19 nov 2026.
+  Fuente de verdad: docs/01-requirements.md (el borrador manda sobre el prototipo).
+-->
+<style>
+  :root{
+    --paper:#f7f1e6; --card:#fffaf1; --ink:#2b2118; --muted:#6b5a4a; --line:#e3d6c2;
+    --wood:#8b5e3c; --wood-ink:#fff; --ok:#3d6b3a; --ok-bg:#e4efd9; --warn:#8a5a00; --warn-bg:#fbecc8;
+    --bad:#9b2c2c; --bad-bg:#f8dcd8; --serif:Georgia,"Times New Roman",serif; --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:#d9d4cc;font-family:var(--sans);color:var(--ink)}
+  button,input,textarea{font:inherit;color:inherit}
+  :focus-visible{outline:3px solid #1a5fb4;outline-offset:2px}
+
+  /* ---- Barra del prototipo (no es parte de la app) ---- */
+  .proto{background:#1f1f1f;color:#eee;font:13px/1.3 var(--sans);padding:8px 12px;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;position:sticky;top:0;z-index:50}
+  .proto b{color:#aaa;font-weight:600;margin-right:4px}
+  .seg{display:inline-flex;border:1px solid #555;border-radius:6px;overflow:hidden}
+  .seg button{background:none;border:0;color:#ddd;padding:4px 9px;cursor:pointer}
+  .seg button[aria-pressed=true]{background:#eee;color:#111}
+  .proto label{display:inline-flex;gap:4px;align-items:center;cursor:pointer}
+  .proto .reset{background:none;border:1px solid #555;color:#ddd;border-radius:6px;padding:4px 9px;cursor:pointer}
+
+  /* ---- Marco del teléfono ---- */
+  .frame{max-width:420px;margin:16px auto;background:var(--paper);min-height:760px;border-radius:18px;box-shadow:0 10px 40px #0003;overflow:hidden;display:flex;flex-direction:column;position:relative}
+  @media (max-width:460px){.frame{margin:0;border-radius:0;min-height:calc(100vh - 80px);box-shadow:none}}
+  .top{display:flex;align-items:center;gap:8px;padding:14px 16px 10px;border-bottom:1px solid var(--line);background:var(--paper)}
+  .top h1{font:600 20px/1.2 var(--serif);margin:0;flex:1}
+  .top .back{background:none;border:0;font-size:22px;padding:2px 8px 2px 0;cursor:pointer}
+  .who{font-size:12px;color:var(--muted)}
+  main{flex:1;padding:16px;overflow:auto}
+  .nav{display:flex;border-top:1px solid var(--line);background:var(--card)}
+  .nav button{flex:1;background:none;border:0;padding:10px 4px 12px;font-size:13px;color:var(--muted);cursor:pointer;position:relative}
+  .nav button[aria-current=page]{color:var(--wood);font-weight:700}
+  .nav button[aria-current=page]::before{content:"";position:absolute;top:0;left:25%;right:25%;height:3px;background:var(--wood);border-radius:0 0 3px 3px}
+  .nav .dot{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;background:var(--bad);color:#fff;font-size:11px;margin-left:3px}
+
+  /* ---- Componentes ---- */
+  h2{font:600 17px/1.3 var(--serif);margin:20px 0 8px}
+  h2:first-child{margin-top:0}
+  p{margin:0 0 10px;line-height:1.45}
+  .muted{color:var(--muted);font-size:14px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--wood);background:var(--wood);color:var(--wood-ink);border-radius:10px;padding:10px 14px;font-weight:600;cursor:pointer;text-decoration:none}
+  .btn.sec{background:transparent;color:var(--wood)}
+  .btn.ghost{background:transparent;border-color:transparent;color:var(--wood);padding:6px 8px}
+  .btn.danger{background:transparent;border-color:var(--bad);color:var(--bad)}
+  .btn.block{width:100%}
+  /* Desactivado inconfundible (hallazgo 12): sin relleno, borde punteado y candado */
+  .btn:disabled{background:transparent;border:1px dashed #b3a796;color:#7d7266;cursor:not-allowed;font-weight:500}
+  .btn:disabled::before{content:"🔒";font-size:.9em}
+  .row{display:flex;gap:8px;align-items:center}
+  .row.wrap{flex-wrap:wrap}
+  .stack>*+*{margin-top:10px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
+  .item{display:flex;gap:12px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:8px}
+  .item.alert{border-color:var(--bad);background:#fff3f1}
+  .item .body{flex:1;min-width:0}
+  .item .t{font-weight:600}
+  .item .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .item.link{cursor:pointer}
+  .badge{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;white-space:nowrap}
+  .b-ok{background:var(--ok-bg);color:var(--ok)}
+  .b-no{background:#ece6dc;color:#5b4f43}
+  .b-warn{background:var(--warn-bg);color:var(--warn)}
+  .b-bad{background:var(--bad-bg);color:var(--bad)}
+  .b-mut{background:#ece6dc;color:#5b4f43}
+  label.f{display:block;font-size:14px;font-weight:600;margin:12px 0 4px}
+  input[type=text],input[type=email],input[type=date],input[type=search],textarea{width:100%;padding:10px 12px;border:1px solid #bfae96;border-radius:10px;background:#fff}
+  .err{color:var(--bad);font-size:13px;margin-top:4px}
+  .ok-msg{background:var(--ok-bg);color:var(--ok);padding:10px 12px;border-radius:10px;font-size:14px}
+  .warn-msg{background:var(--warn-bg);color:var(--warn);padding:10px 12px;border-radius:10px;font-size:14px}
+  .empty{text-align:center;padding:36px 12px;color:var(--muted)}
+  .empty .ico{font-size:40px;margin-bottom:8px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .chip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:5px 10px;font-size:13px;cursor:pointer}
+
+  /* Portadas (dibujadas con CSS, sin imágenes) */
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  .bk{cursor:pointer;background:none;border:0;padding:0;text-align:left}
+  .cover{aspect-ratio:2/3;border-radius:4px 8px 8px 4px;padding:12px 10px;color:#fff;display:flex;flex-direction:column;justify-content:space-between;box-shadow:inset 6px 0 0 #0002,0 3px 8px #0003;position:relative;overflow:hidden}
+  .cover .ct{font:600 15px/1.2 var(--serif)}
+  .cover .ca{font-size:11px;opacity:.85}
+  .cover.sm{width:44px;padding:4px;flex:none}
+  .cover.sm .ct{font-size:7px}.cover.sm .ca{display:none}
+  .cover.lg{width:150px;margin:0 auto}
+  .cover.lg .ct{font-size:18px}
+  .cover.dim{filter:grayscale(1);opacity:.45} /* no disponible: atenuada (hallazgo 10) */
+  .bk.na .meta .t,.bk.na .meta .a{color:#8a7f73}
+  .bk .meta{margin-top:6px}
+  .bk .meta .t{font-weight:600;font-size:14px;line-height:1.25}
+  .bk .meta .a{font-size:13px;color:var(--muted)}
+  .detail-h{text-align:center;margin-bottom:12px}
+  .detail-h .t{font:600 22px/1.2 var(--serif);margin-top:12px}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14px}
+  .kv dt{color:var(--muted)}.kv dd{margin:0}
+
+  /* Esqueleto (cargando) */
+  .sk{background:linear-gradient(90deg,#e8dfd0 25%,#f2ebdf 50%,#e8dfd0 75%);background-size:200% 100%;animation:sh 1.2s infinite;border-radius:8px}
+  @keyframes sh{to{background-position:-200% 0}}
+
+  /* Modal y aviso */
+  /* Fijos a la ventana: siempre a la vista, sin importar el scroll (hallazgo 1) */
+  .ov{position:fixed;inset:0;background:#0006;display:flex;align-items:center;justify-content:center;padding:16px;z-index:60}
+  .sheet{background:var(--paper);width:100%;max-width:400px;border-radius:16px;padding:18px 16px 20px;max-height:calc(100vh - 32px);overflow:auto;box-shadow:0 10px 40px #0005}
+  .sheet h3{font:600 18px/1.3 var(--serif);margin:0 0 10px}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;width:calc(100% - 24px);max-width:396px;background:#2b2118;color:#fff;padding:10px 14px;border-radius:10px;font-size:14px;z-index:70;box-shadow:0 4px 16px #0004}
+
+  /* Marca de HU (discreta) y notas del prototipo */
+  .hu{display:inline-block;font:600 10px/1 ui-monospace,Consolas,monospace;color:#7a6bb0;background:#efeaff;border-radius:4px;padding:2px 4px;margin-left:4px;vertical-align:middle}
+  .no-hu .hu{display:none}
+  .pnote{border:1px dashed #7a6bb0;color:#4f4385;background:#f6f3ff;border-radius:8px;padding:8px 10px;font-size:12px;margin:12px 0}
+  .pnote button{background:none;border:0;color:#4f4385;text-decoration:underline;cursor:pointer;padding:0;font-size:12px}
+
+  /* ---- Modo gris (validar flujos sin estilo) ---- */
+  .gris{--paper:#f4f4f4;--card:#fff;--ink:#222;--muted:#666;--line:#ccc;--wood:#555;--ok:#333;--ok-bg:#e6e6e6;--warn:#333;--warn-bg:#e6e6e6;--bad:#333;--bad-bg:#ddd;--serif:var(--sans)}
+  .gris .cover{background:#cfcfcf !important;color:#333;box-shadow:none;border-radius:2px}
+  .gris .item.alert{background:#fff;border:2px solid #333}
+  .gris .nav .dot{background:#333}
+  .gris .sk{background:#e2e2e2;animation:none}
+</style>
+<link rel="stylesheet" href="kit/validacion.css">
+</head>
+<body>
+<div class="proto" data-solo-autor role="region" aria-label="Controles del prototipo">
+  <span><b>Rol</b><span class="seg" id="c-role"></span></span>
+  <span><b>Estado</b><span class="seg" id="c-view"></span></span>
+  <span><b>Modo</b><span class="seg" id="c-mode"></span></span>
+  <label><input type="checkbox" id="c-hu" checked> HU</label>
+  <button class="reset" id="c-reset" title="Vuelve a los datos iniciales">Reiniciar datos</button>
+</div>
+<div class="frame gris" id="frame"></div>
+
+<script>
+/* ===================== Datos fijos ===================== */
+const TODAY = '2026-11-19';
+const ME_FRIEND = 'f1'; // el amigo simulado es Ana
+const OWNER = 'Pablo';  // nombre ficticio del dueño
+const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+
+function seed(){
+  return {
+    books:[
+      {id:'b1',title:'Cien años de soledad',author:'Gabriel García Márquez',isbn:'9780307474728',color:'#8c3b2e'},
+      {id:'b2',title:'Pedro Páramo',author:'Juan Rulfo',isbn:'9786070726094',color:'#5b6b3a'},
+      {id:'b3',title:'La sombra del viento',author:'Carlos Ruiz Zafón',isbn:'9788408163435',color:'#2f4858'},
+      {id:'b4',title:'Rayuela',author:'Julio Cortázar',isbn:'9788437604572',color:'#b5651d'},
+      {id:'b5',title:'Ficciones',author:'Jorge Luis Borges',isbn:'9788499089508',color:'#6d4c7d'},
+      {id:'b6',title:'El túnel',author:'Ernesto Sabato',isbn:'9788432217289',color:'#33415c'},
+      {id:'b7',title:'Como agua para chocolate',author:'Laura Esquivel',isbn:'9780307474063',color:'#a23e48'},
+      {id:'b8',title:'Los detectives salvajes',author:'Roberto Bolaño',isbn:'9788433966636',color:'#7a5c2e'},
+      {id:'b9',title:'La casa de los espíritus',author:'Isabel Allende',isbn:'9788401352836',color:'#3d6b5a'},
+      {id:'b10',title:'Sapiens',author:'Yuval Noah Harari',isbn:'9786073138451',color:'#9a7b4f'},
+      {id:'b11',title:'El principito',author:'Antoine de Saint-Exupéry',isbn:'9788498381498',color:'#4a6fa5'},
+      {id:'b12',title:'Temporada de huracanes',author:'Fernanda Melchor',isbn:'9788439733768',color:'#5e3a3a',retired:true},
+    ],
+    friends:[
+      {id:'f1',name:'Ana Torres',email:'ana@ejemplo.com'},
+      {id:'f2',name:'Luis Méndez',email:'luis@ejemplo.com'},
+      {id:'f3',name:'Marta Ruiz',email:'marta@ejemplo.com'},
+      {id:'f4',name:'Diego Salas',email:'diego@ejemplo.com'},
+      {id:'f5',name:'Sofía Lara',email:'sofia@ejemplo.com'},
+    ],
+    invites:[
+      {id:'i1',name:'Carla',code:'q8Lm2x',created:'2026-11-14',expires:'2026-11-21'},
+      {id:'i2',name:'Jorge',code:'Zt41ka',created:'2026-11-17',expires:'2026-11-24'},
+    ],
+    requests:[
+      {id:'r1',book:'b4',friend:'f2',created:'2026-11-18',status:'Pendiente'},
+      {id:'r2',book:'b7',friend:'f1',created:'2026-11-19',status:'Pendiente'},
+      {id:'r3',book:'b5',friend:'f1',created:'2026-11-02',status:'Rechazado',reason:'Lo estoy releyendo, en diciembre te lo presto.'},
+      {id:'r4',book:'b9',friend:'f3',created:'2026-10-28',status:'Cancelado'},
+    ],
+    loans:[
+      {id:'l1',book:'b1',friend:'f3',start:'2026-10-20',due:'2026-11-20'},
+      {id:'l2',book:'b3',friend:'f1',start:'2026-10-01',due:'2026-11-01'},
+      {id:'l3',book:'b6',friend:'f4',start:'2026-11-10',due:'2026-12-10'},
+      {id:'l4',book:'b2',friend:'f1',start:'2026-08-01',due:'2026-09-01',returned:'2026-08-28'},
+      {id:'l5',book:'b1',friend:'f2',start:'2026-06-01',due:'2026-07-01',returned:'2026-07-05'},
+      {id:'l6',book:'b8',friend:'f5',start:'2026-09-15',due:'2026-10-15',returned:'2026-10-15'},
+    ],
+  };
+}
+function emptySeed(){return {books:[],friends:[],invites:[],requests:[],loans:[]}}
+
+const ISBN_API = { // simula Open Library
+  '9788420471839':{title:'El amor en los tiempos del cólera',author:'Gabriel García Márquez',color:'#2e6f6a'},
+};
+
+/* ===================== Estado ===================== */
+let S;
+function reset(keepUi){
+  const ui = keepUi && S ? {role:S.role,view:S.view,mode:S.mode,hu:S.hu} : {role:'owner',view:'data',mode:'gris',hu:true};
+  S = Object.assign(ui,{full:seed(),empty:emptySeed(),stack:[],modal:null,toast:null,q:'',onlyAvail:false,showRetired:false});
+  S.route = defaultRoute();
+}
+const DB = () => S.view==='empty' ? S.empty : S.full;
+function defaultRoute(){return S.role==='owner'?{name:'panel'}:S.role==='friend'?{name:'catalog'}:{name:'login'}}
+
+/* ===================== Utilidades ===================== */
+const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const d = s => new Date(s+'T12:00:00');
+const fmt = s => { const x=d(s); return x.getDate()+' '+MESES[x.getMonth()]; };
+const days = (a,b) => Math.round((d(b)-d(a))/864e5);
+const addDays = (s,n) => { const x=d(s); x.setDate(x.getDate()+n); return x.toISOString().slice(0,10); };
+const norm = s => s.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+const LATER = {4:'Should',9:'Should',16:'Should',20:'Could'}; // fuera del MVP
+const hu = (...ids) => ids.map(i=>`<span class="hu">HU-${String(i).padStart(3,'0')}${LATER[i]?' · '+LATER[i]:''}</span>`).join('');
+const toDMY = iso => iso ? iso.slice(8,10)+'/'+iso.slice(5,7)+'/'+iso.slice(0,4) : '';
+function parseDMY(s){
+  const m=s.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); if(!m) return null;
+  const iso=`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`, x=d(iso);
+  return (isNaN(x)||x.getDate()!==+m[1]||x.getMonth()+1!==+m[2]) ? null : iso;
+}
+const lateTxt = l => l.returned && l.returned>l.due ? ` · <b>devuelto ${days(l.due,l.returned)} días tarde</b>` : '';
+const uid = p => p+Math.random().toString(36).slice(2,7);
+
+const book = id => DB().books.find(b=>b.id===id);
+const friend = id => DB().friends.find(f=>f.id===id) || {name:'(amigo)'};
+const openLoan = bid => DB().loans.find(l=>l.book===bid && !l.returned);
+const pendingReq = bid => DB().requests.find(r=>r.book===bid && r.status==='Pendiente');
+const bookStatus = b => b.retired?'Retirado':(openLoan(b.id)||pendingReq(b.id))?'No disponible':'Disponible';
+const loanStatus = l => l.returned?'Devuelto':(l.due<TODAY?'Vencido':'Activo');
+const late = l => days(l.due,TODAY);
+const myOverdue = () => DB().loans.find(l=>l.friend===ME_FRIEND&&loanStatus(l)==='Vencido');
+
+function badge(st){
+  const m={'Disponible':'b-ok','No disponible':'b-no','Retirado':'b-mut','Pendiente':'b-warn','Activo':'b-ok','Vencido':'b-bad','Devuelto':'b-mut','Rechazado':'b-mut','Cancelado':'b-mut','Aprobado':'b-ok'};
+  return `<span class="badge ${m[st]||'b-mut'}">${st}</span>`;
+}
+function cover(b,cls=''){
+  return `<div class="cover ${cls}" style="background:${b.color||'#8b7355'}" aria-hidden="true"><div class="ct">${esc(b.title)}</div><div class="ca">${esc(b.author)}</div></div>`;
+}
+
+/* ===================== Navegación ===================== */
+function go(name,id){S.stack.push(S.route);S.route={name,id};S.modal=null;render();const m=document.querySelector('main');if(m)m.scrollTop=0}
+function back(){S.route=S.stack.pop()||defaultRoute();S.modal=null;render()}
+function tab(name){S.stack=[];S.route={name};S.modal=null;render()}
+function toast(msg){S.toast=msg;render();clearTimeout(toast.t);toast.t=setTimeout(()=>{S.toast=null;render()},3200)}
+const mail = to => `📧 Correo a ${to} (simulado)`;
+
+const DATA_SCREENS = ['panel','catalog','book','my','friends','friend'];
+
+/* ===================== Pantallas ===================== */
+const screens = {
+  /* ---------- Sin cuenta ---------- */
+  login(){
+    return {title:'Librero', body:`
+      <p>Entra con tu correo. Te mandamos un enlace, sin contraseñas. ${hu(2)}</p>
+      <form data-form="login" novalidate>
+        <label class="f" for="em">Correo</label>
+        <input type="email" id="em" name="email" autocomplete="email" placeholder="tucorreo@ejemplo.com">
+        <div class="err" id="em-err" hidden>Escribe un correo válido.</div>
+        <div style="margin-top:14px"><button class="btn block">Enviarme el enlace</button></div>
+      </form>
+      <p class="muted" style="margin-top:16px">¿No tienes cuenta? Solo se entra por invitación del dueño.</p>
+      <div class="pnote">Prototipo · simular que abres un enlace de invitación:
+        <button data-go="invite">válido</button> · <button data-go="invite-bad">vencido o usado</button></div>`};
+  },
+  'login-sent'(){
+    return {title:'Revisa tu correo', back:true, body:`
+      <div class="ok-msg">Si el correo está registrado, te enviamos un enlace para entrar. Revisa también la carpeta de spam. ${hu(2)}</div>
+      <p class="muted" style="margin-top:12px">El mensaje es el mismo exista o no la cuenta (HU-002.CA2).</p>
+      <div class="pnote">Prototipo · simular que abres el enlace del correo:
+        <button data-act="enter" data-role="owner">como dueño</button> · <button data-act="enter" data-role="friend">como amigo (Ana)</button></div>`};
+  },
+  invite(){
+    const inv=S.full.invites.slice(-1)[0]; // la invitación más reciente
+    return {title:'Te invitaron', body:`
+      <p><b>${OWNER} te invitó a ver su librero</b> y pedirle libros prestados. ${hu(1)}</p>
+      <form data-form="invite" novalidate>
+        <input type="hidden" name="inv" value="${esc(inv?.id||'')}">
+        <label class="f" for="in-n">Tu nombre</label>
+        <input type="text" id="in-n" name="name" autocomplete="name" value="${esc(inv?.name||'')}">
+        <div class="muted" style="font-size:13px;margin-top:4px">Lo escribió ${OWNER} al invitarte; corrígelo si hace falta.</div>
+        <div class="err" id="in-n-err" hidden>Escribe tu nombre.</div>
+        <label class="f" for="in-e">Tu correo</label>
+        <input type="email" id="in-e" name="email" autocomplete="email">
+        <div class="err" id="in-e-err" hidden>Escribe un correo válido.</div>
+        <p class="muted" style="margin-top:12px"><b>Privacidad:</b> solo guardamos tu nombre y tu correo, para avisarte de tus pedidos. El catálogo no es público. (RNF-006)</p>
+        <button class="btn block">Unirme</button>
+      </form>`};
+  },
+  'invite-bad'(){
+    return {title:'Invitación', body:`
+      <div class="empty"><div class="ico">🔒</div>
+      <p><b>Esta invitación ya no es válida.</b> ${hu(1)}</p>
+      <p>Puede que ya se haya usado, que haya vencido o que el dueño la haya revocado. Pídele un enlace nuevo.</p></div>
+      <button class="btn sec block" data-go="login">Ya tengo cuenta: entrar</button>`};
+  },
+
+  /* ---------- Dueño ---------- */
+  /* Inicio = antigua Bandeja: resumen y acciones en un solo lugar (hallazgo 3) */
+  panel(){
+    const db=DB(), open=db.loans.filter(l=>!l.returned);
+    const pend=db.requests.filter(r=>r.status==='Pendiente');
+    const over=open.filter(l=>loanStatus(l)==='Vencido').sort((a,b)=>a.due.localeCompare(b.due));
+    const act=open.filter(l=>loanStatus(l)==='Activo').sort((a,b)=>a.due.localeCompare(b.due));
+    const ret=db.loans.filter(l=>l.returned).sort((a,b)=>b.returned.localeCompare(a.returned)).slice(0,5);
+    if(!pend.length && !open.length) return {title:'Inicio', body:`
+      <div class="empty"><div class="ico">📚</div><p><b>Todo tranquilo.</b> No hay pedidos ni libros prestados. ${hu(14)}</p>
+      <p>${db.books.length?'Invita a tus amigos para que empiecen a pedir.':'Empieza registrando tus libros e invitando a tus amigos.'}</p></div>
+      <div class="stack"><button class="btn block" data-go="form">Registrar un libro</button>
+      <button class="btn sec block" data-go="friends">Invitar a un amigo</button></div>`};
+    const sum=[over.length&&`${over.length} vencido${over.length>1?'s':''}`, pend.length&&`${pend.length} pedido${pend.length>1?'s':''} por revisar`, act.length&&`${act.length} prestado${act.length>1?'s':''} al día`].filter(Boolean).join(' · ');
+    return {title:'Inicio', body:`
+      <p class="muted">${sum} ${hu(14)}</p>
+      ${over.length?`<h2>Vencidos (${over.length}) ${hu(13,12,21)}</h2>${over.map(l=>loanItem(l,{alert:true,actions:true})).join('')}`:''}
+      <h2>Pedidos por revisar (${pend.length}) ${hu(10,11)}</h2>
+      ${pend.length?pend.map(r=>reqItem(r,{actions:true})).join(''):'<p class="muted">Nada por revisar.</p>'}
+      <h2>Prestados (${act.length}) ${hu(12,21)}</h2>
+      ${act.length?act.map(l=>loanItem(l,{actions:true})).join(''):'<p class="muted">Ningún libro prestado.</p>'}
+      ${ret.length?`<h2>Devueltos recientemente ${hu(12)}</h2>${ret.map(l=>loanItem(l,{})).join('')}`:''}`};
+  },
+  friends(){
+    const db=DB(), fr=db.friends.filter(f=>!f.removed);
+    const inv=db.invites.slice().sort((a,b)=>a.expires.localeCompare(b.expires));
+    return {title:'Amigos', body:`
+      <button class="btn block" data-act="invite-new">+ Generar invitación ${hu(1)}</button>
+      <h2>Amigos (${fr.length}) ${hu(17)}</h2>
+      ${fr.length?fr.map(f=>{
+        const ls=db.loans.filter(l=>l.friend===f.id&&!l.returned), ov=ls.filter(l=>loanStatus(l)==='Vencido').length;
+        return `<div class="item link" data-go="friend" data-id="${f.id}"><div class="body"><div class="t">${esc(f.name)}</div><div class="muted">${esc(f.email)}</div></div>
+          <div>${ov?`<span class="badge b-bad">${ov} vencido${ov>1?'s':''}</span>`:ls.length?`<span class="badge b-ok">${ls.length} prestado${ls.length>1?'s':''}</span>`:''}</div></div>`;
+      }).join(''):`<div class="empty" style="padding:16px"><p>Aún no tienes amigos registrados. Genera una invitación y compártela por WhatsApp o correo.</p></div>`}
+      <h2>Invitaciones pendientes (${inv.length}) ${hu(17)}</h2>
+      ${inv.length?inv.map(i=>`<div class="item"><div class="body"><div class="t">Para ${esc(i.name)}</div>
+        <div class="muted">Enlace …/i/${esc(i.code)} · creada el ${fmt(i.created)} · vence el ${fmt(i.expires)} (en ${days(TODAY,i.expires)} días)</div>
+        <div class="acts"><button class="btn ghost" data-act="copy">Copiar enlace</button><button class="btn danger" data-act="revoke" data-id="${i.id}">Revocar</button></div></div></div>`).join('')
+        :'<p class="muted">No hay invitaciones pendientes.</p>'}`};
+  },
+  friend(){
+    const f=friend(S.route.id), ls=DB().loans.filter(l=>l.friend===f.id).sort((a,b)=>b.start.localeCompare(a.start));
+    const act=ls.filter(l=>loanStatus(l)==='Activo').length, ov=ls.filter(l=>loanStatus(l)==='Vencido').length, open=act+ov;
+    return {title:esc(f.name), back:true, body:`
+      <p class="muted">${esc(f.email)}</p>
+      <div class="row wrap"><span class="badge b-ok">${act} prestado${act!==1?'s':''}</span><span class="badge ${ov?'b-bad':'b-mut'}">${ov} vencido${ov!==1?'s':''}</span><span class="badge b-mut">${ls.length} en total</span></div>
+      <h2>Historial de préstamos ${hu(16)}</h2>
+      ${ls.length?ls.map(l=>histItem(l,'book')).join(''):'<p class="muted">Todavía no le has prestado libros.</p>'}
+      <h2>Acceso ${hu(22)}</h2>
+      ${open?`<button class="btn danger block" disabled>Quitar acceso</button>
+        <p class="muted" style="margin-top:6px">Tiene ${open} libro${open>1?'s':''} prestado${open>1?'s':''}. Podrás quitarle el acceso cuando lo${open>1?'s':''} devuelva. (RN-012)</p>`
+        :`<button class="btn danger block" data-act="remove" data-id="${f.id}">Quitar acceso</button>`}`};
+  },
+  form(){
+    const b = S.route.id ? book(S.route.id) : null;
+    return {title:b?'Editar libro':'Registrar libro', back:true, body:`
+      <form data-form="book" novalidate>
+        <label class="f" for="isbn">ISBN <span class="muted" style="font-weight:400">(opcional)</span> ${hu(4)}</label>
+        <div class="row"><input type="text" id="isbn" name="isbn" inputmode="numeric" value="${esc(b?.isbn)}" placeholder="978…">
+          <button type="button" class="btn sec" data-act="isbn">Buscar</button></div>
+        <div id="isbn-msg"></div>
+        <div class="pnote">Prototipo · ISBN que sí encuentra: <button type="button" data-act="isbn-demo">9788420471839</button>. Con «Estado: Error» simula que la API no responde.</div>
+        <label class="f" for="ti">Título * ${hu(3)}</label>
+        <input type="text" id="ti" name="title" value="${esc(b?.title)}">
+        <div class="err" id="ti-err" hidden>Falta el título.</div>
+        <label class="f" for="au">Autor *</label>
+        <input type="text" id="au" name="author" value="${esc(b?.author)}">
+        <div class="err" id="au-err" hidden>Falta el autor.</div>
+        <input type="hidden" name="color" value="${esc(b?.color||'')}">
+        <div id="cv" style="margin:16px 0">${b?`<div style="width:90px">${cover(b)}</div>`:'<p class="muted">Sin portada: se mostrará una portada genérica.</p>'}</div>
+        <button class="btn block">${b?'Guardar cambios':'Guardar libro'}</button>
+      </form>`};
+  },
+
+  /* ---------- Compartidas ---------- */
+  catalog(){
+    const owner=S.role==='owner', db=DB(), all=db.books.filter(b=>!b.retired), nRet=db.books.length-all.length;
+    if(!all.length) return {title:'Catálogo', body:`
+      <div class="empty"><div class="ico">📖</div><p><b>El catálogo está vacío.</b> ${hu(6)}</p>
+      <p>${owner?'Registra tu primer libro para que tus amigos lo vean.':'El dueño todavía no ha registrado libros.'}</p></div>
+      ${owner?'<button class="btn block" data-go="form">Registrar el primer libro</button>':''}`};
+    return {title:'Catálogo', body:`
+      ${owner?`<div style="margin-bottom:12px"><button class="btn block" data-go="form">+ Registrar libro ${hu(3)}</button></div>`:''}
+      <label class="f" for="q" style="margin-top:0">Buscar por título o autor ${hu(7)}</label>
+      <input type="search" id="q" value="${esc(S.q)}" placeholder="Ej. borges">
+      <label style="display:flex;gap:8px;align-items:center;margin:10px 0 ${owner&&nRet?'4px':'14px'};font-size:14px"><input type="checkbox" id="only" ${S.onlyAvail?'checked':''}> Solo disponibles</label>
+      ${owner&&nRet?`<label style="display:flex;gap:8px;align-items:center;margin:0 0 14px;font-size:14px"><input type="checkbox" id="showret" ${S.showRetired?'checked':''}> Mostrar retirados (${nRet}) ${hu(5)}</label>`:''}
+      <div id="cat-list">${catalogList()}</div>`};
+  },
+  book(){
+    const b=book(S.route.id); if(!b) return {title:'Libro',back:true,body:'<p>No encontrado.</p>'};
+    const st=bookStatus(b), owner=S.role==='owner';
+    let box='';
+    if(owner){
+      const l=openLoan(b.id), r=pendingReq(b.id);
+      const where = l?`<div class="${loanStatus(l)==='Vencido'?'warn-msg':'ok-msg'}">Prestado a <b>${esc(friend(l.friend).name)}</b> · ${loanStatus(l)==='Vencido'?`venció el ${fmt(l.due)} (${late(l)} días de atraso)`:`devolver el ${fmt(l.due)}`}</div>`
+        : r?`<div class="warn-msg">Pedido por <b>${esc(friend(r.friend).name)}</b> · por revisar <button class="btn ghost" data-act="tab" data-tab="panel">Ir al inicio</button></div>`:'';
+      const hist=DB().loans.filter(x=>x.book===b.id).sort((a,c)=>c.start.localeCompare(a.start));
+      const why = l?'Está prestado: márcalo como devuelto antes de retirarlo.':r?'Tiene un pedido por revisar: apruébalo o recházalo antes de retirarlo.':'';
+      box=`${where}
+        ${b.retired?`<div class="warn-msg">Retirado: tus amigos no lo ven en el catálogo.</div>`:''}
+        <div class="row" style="margin-top:12px"><button class="btn sec" style="flex:1" data-go="form" data-id="${b.id}">Editar ${hu(5)}</button>
+        ${b.retired?`<button class="btn" style="flex:1" data-act="reactivate" data-id="${b.id}">Reactivar</button>`
+          :`<button class="btn danger" style="flex:1" data-act="retire" data-id="${b.id}" ${why?'disabled':''}>Retirar</button>`}</div>
+        ${why?`<p class="muted" style="margin-top:6px">${why} (RN-007)</p>`:''}
+        <h2>Historial ${hu(16)}</h2>
+        ${hist.length?hist.map(l=>histItem(l,'friend')).join(''):'<p class="muted">Nunca se ha prestado.</p>'}`;
+    } else {
+      const mine=DB().requests.find(r=>r.book===b.id&&r.friend===ME_FRIEND&&r.status==='Pendiente');
+      const myLoan=DB().loans.find(l=>l.book===b.id&&l.friend===ME_FRIEND&&!l.returned);
+      if(mine) box=`<div class="warn-msg">Lo pediste el ${fmt(mine.created)}. Esperando a que el dueño lo apruebe.</div>
+        <button class="btn danger block" style="margin-top:10px" data-act="cancel" data-id="${mine.id}">Cancelar mi pedido ${hu(9)}</button>`;
+      else if(myLoan) box=`<div class="${loanStatus(myLoan)==='Vencido'?'warn-msg':'ok-msg'}">Lo tienes tú. ${loanStatus(myLoan)==='Vencido'?`Venció el ${fmt(myLoan.due)}: por favor devuélvelo.`:`Devuélvelo el ${fmt(myLoan.due)}.`}</div>`;
+      else if(st==='Disponible' && myOverdue()){ const ov=myOverdue();
+        box=`<div class="warn-msg" style="margin-bottom:10px">Tienes «${esc(book(ov.book).title)}» vencido desde el ${fmt(ov.due)}. Devuélvelo para poder pedir otro libro. (RN-011) ${hu(8)}</div>
+          <button class="btn block" disabled>Pedir prestado</button>`; }
+      else if(st==='Disponible') box=`<button class="btn block" data-act="request" data-id="${b.id}">Pedir prestado ${hu(8)}</button>`;
+      else box=`<button class="btn block" disabled>Pedir prestado</button><p class="muted" style="margin-top:6px">No disponible por ahora: alguien más lo tiene o lo pidió. ${hu(8)}</p>`;
+    }
+    return {title:'', back:true, body:`
+      <div class="detail-h">${cover(b,'lg'+(st==='Disponible'?'':' dim'))}<div class="t">${esc(b.title)}</div><div class="muted">${esc(b.author)}</div>
+      <div style="margin-top:8px">${badge(st)}</div></div>
+      ${b.isbn?`<p class="muted" style="text-align:center">ISBN ${esc(b.isbn)}</p>`:''}
+      ${box}`};
+  },
+
+  /* ---------- Amigo ---------- */
+  my(){
+    const db=DB();
+    const pend=db.requests.filter(r=>r.friend===ME_FRIEND&&r.status==='Pendiente');
+    const ls=db.loans.filter(l=>l.friend===ME_FRIEND&&!l.returned).sort((a,b)=>a.due.localeCompare(b.due));
+    const pastL=db.loans.filter(l=>l.friend===ME_FRIEND&&l.returned).map(l=>({date:l.returned,html:`<div class="item">${cover(book(l.book),'sm')}<div class="body"><div class="t">${esc(book(l.book).title)}</div><div class="muted">Devuelto el ${fmt(l.returned)}${lateTxt(l)}</div></div>${badge('Devuelto')}</div>`}));
+    const ov=myOverdue();
+    const pastR=db.requests.filter(r=>r.friend===ME_FRIEND&&['Rechazado','Cancelado'].includes(r.status)).map(r=>({date:r.created,html:`<div class="item">${cover(book(r.book),'sm')}<div class="body"><div class="t">${esc(book(r.book).title)}</div><div class="muted">Pedido el ${fmt(r.created)}${r.reason?` · «${esc(r.reason)}»`:''}</div></div>${badge(r.status)}</div>`}));
+    const past=[...pastL,...pastR].sort((a,b)=>b.date.localeCompare(a.date));
+    if(!pend.length&&!ls.length&&!past.length) return {title:'Mis pedidos', body:`
+      <div class="empty"><div class="ico">🙌</div><p>Aún no has pedido libros. ${hu(15)}</p></div>
+      <button class="btn block" data-act="tab" data-tab="catalog">Ver el catálogo</button>`};
+    return {title:'Mis pedidos', body:`
+      ${ov?`<div class="warn-msg" style="margin-bottom:12px">Mientras tengas un libro vencido no puedes pedir otro. (RN-011)</div>`:''}
+      <h2>Libros que tengo ${hu(15)}</h2>
+      ${ls.length?ls.map(l=>{const ov=loanStatus(l)==='Vencido';return `<div class="item link ${ov?'alert':''}" data-go="book" data-id="${l.book}">${cover(book(l.book),'sm')}<div class="body"><div class="t">${esc(book(l.book).title)}</div>
+        <div class="muted">${ov?`<b style="color:var(--bad)">Venció el ${fmt(l.due)} · ${late(l)} días de atraso</b>`:`Devolver el <b>${fmt(l.due)}</b> (en ${days(TODAY,l.due)} días)`}</div></div>${badge(loanStatus(l))}</div>`}).join(''):'<p class="muted">No tienes libros prestados.</p>'}
+      <h2>Pedidos en espera ${hu(9)}</h2>
+      ${pend.length?pend.map(r=>`<div class="item">${cover(book(r.book),'sm')}<div class="body"><div class="t">${esc(book(r.book).title)}</div><div class="muted">Pedido el ${fmt(r.created)} · esperando al dueño</div>
+        <div class="acts"><button class="btn danger" data-act="cancel" data-id="${r.id}">Cancelar pedido</button></div></div>${badge('Pendiente')}</div>`).join(''):'<p class="muted">No tienes pedidos en espera.</p>'}
+      ${past.length?`<h2>Anteriores</h2>${past.map(p=>p.html).join('')}`:''}`};
+  },
+};
+
+/* ---------- Piezas ---------- */
+function catalogList(){
+  const q=norm(S.q.trim());
+  const list=DB().books.filter(b=>!b.retired||(S.role==='owner'&&S.showRetired))
+    .filter(b=>!q||norm(b.title).includes(q)||norm(b.author).includes(q))
+    .filter(b=>!S.onlyAvail||bookStatus(b)==='Disponible');
+  if(!list.length) return `<div class="empty" style="padding:20px"><p>Ningún libro coincide con tu búsqueda.</p></div>`;
+  return `<div class="grid">${list.map(b=>{const st=bookStatus(b);return `<button class="bk ${st==='Disponible'?'':'na'}" data-go="book" data-id="${b.id}">${cover(b,st==='Disponible'?'':'dim')}
+    <div class="meta"><div class="t">${esc(b.title)}</div><div class="a">${esc(b.author)}</div><div style="margin-top:4px">${badge(st)}</div></div></button>`}).join('')}</div>`;
+}
+function reqItem(r,o){
+  const b=book(r.book), ago=days(r.created,TODAY);
+  return `<div class="item">${cover(b,'sm')}<div class="body">
+    <div class="t">${esc(friend(r.friend).name)} pidió «${esc(b.title)}»</div>
+    <div class="muted">${ago===0?'Hoy':ago===1?'Ayer':`Hace ${ago} días`}</div>
+    ${o.actions?`<div class="acts"><button class="btn" data-act="approve" data-id="${r.id}">Aprobar</button><button class="btn sec" data-act="reject" data-id="${r.id}">Rechazar</button></div>`:''}
+  </div></div>`;
+}
+function loanItem(l,o){
+  const b=book(l.book), st=loanStatus(l);
+  const when = st==='Devuelto' ? `Prestado ${fmt(l.start)} · pactado ${fmt(l.due)} · devuelto ${fmt(l.returned)}${lateTxt(l)}`
+    : st==='Vencido' ? `<b style="color:var(--bad)">Venció el ${fmt(l.due)} · ${late(l)} días de atraso</b>`
+    : `Devolver el ${fmt(l.due)} (en ${days(TODAY,l.due)} días)`;
+  return `<div class="item ${o.alert?'alert':''}">${cover(b,'sm')}<div class="body">
+    <div class="t">«${esc(b.title)}» · ${esc(friend(l.friend).name)}</div><div class="muted">${when}</div>
+    ${o.actions?`<div class="acts"><button class="btn sec" data-act="return" data-id="${l.id}">Marcar devuelto</button><button class="btn ghost" data-act="extend" data-id="${l.id}">Extender plazo</button></div>`:''}
+  </div>${badge(st)}</div>`;
+}
+function histItem(l,show){
+  const st=loanStatus(l), label = show==='book'?`«${esc(book(l.book).title)}»`:esc(friend(l.friend).name);
+  return `<div class="item"><div class="body"><div class="t">${label}</div>
+    <div class="muted">Prestado ${fmt(l.start)} · pactado ${fmt(l.due)}${l.returned?` · devuelto ${fmt(l.returned)}`:''}${lateTxt(l)}${st==='Vencido'?` · ${late(l)} días de atraso`:''}</div></div>${badge(st)}</div>`;
+}
+function loadingBody(){
+  return `<div class="sk" style="height:22px;width:60%;margin-bottom:16px"></div>
+    <div class="grid">${'<div><div class="sk" style="aspect-ratio:2/3"></div><div class="sk" style="height:12px;margin-top:8px"></div></div>'.repeat(4)}</div>`;
+}
+function errorBody(){
+  return `<div class="empty"><div class="ico">⚠️</div><p><b>No pudimos cargar esta pantalla.</b></p><p>Revisa tu conexión e inténtalo de nuevo.</p>
+    <button class="btn" data-act="retry">Reintentar</button></div>`;
+}
+
+/* ---------- Modales ---------- */
+// Campo de fecha en dd/mm/aaaa (hallazgo 2): texto + atajos, sin el selector del navegador.
+function dueField(m,label,chips){
+  return `<label class="f" for="due">${label}</label>
+    <input type="text" id="due" inputmode="numeric" autocomplete="off" placeholder="dd/mm/aaaa" value="${esc(m.dueText||'')}" aria-describedby="due-h">
+    <div class="muted" id="due-h" style="font-size:13px;margin-top:4px">Día/mes/año, por ejemplo ${toDMY(addDays(TODAY,14))}</div>
+    <div class="chips">${chips.map(([t,n])=>`<button class="chip" data-act="due" data-days="${n}">${t}</button>`).join('')}</div>
+    ${m.error?`<div class="err">${m.error}</div>`:''}`;
+}
+function readDue(min,minMsg){
+  const t=document.getElementById('due').value.trim(); S.modal.dueText=t;
+  const iso=t&&parseDMY(t);
+  S.modal.error = !t?'Elige una fecha de devolución.':!iso?'Escribe la fecha como dd/mm/aaaa (por ejemplo 03/12/2026).':iso<=min?minMsg:null;
+  return S.modal.error?null:iso;
+}
+function modalHtml(){
+  const m=S.modal; if(!m) return '';
+  let h='';
+  if(m.type==='approve'){
+    const r=DB().requests.find(x=>x.id===m.id), b=book(r.book);
+    h=`<h3>Prestar «${esc(b.title)}» a ${esc(friend(r.friend).name)} ${hu(10)}</h3>
+      ${dueField(m,'Fecha de devolución',[['2 semanas',14],['3 semanas',21],['1 mes',30]])}
+      <p class="muted" style="margin-top:10px">Se le avisará por correo con la fecha.</p>
+      <div class="row" style="margin-top:12px"><button class="btn sec" style="flex:1" data-act="close">Cancelar</button><button class="btn" style="flex:1" data-act="approve-ok">Aprobar préstamo</button></div>`;
+  } else if(m.type==='extend'){
+    const l=DB().loans.find(x=>x.id===m.id), b=book(l.book), ov=loanStatus(l)==='Vencido';
+    h=`<h3>Extender el plazo de «${esc(b.title)}» ${hu(21)}</h3>
+      <p class="muted">${esc(friend(l.friend).name)} · fecha actual: ${fmt(l.due)}${ov?` (vencido, ${late(l)} días de atraso)`:''}</p>
+      ${dueField(m,'Nueva fecha de devolución',[['1 semana más',7],['2 semanas más',14],['1 mes más',30]])}
+      <p class="muted" style="margin-top:10px">Se le avisará por correo con la nueva fecha.${ov?' El préstamo dejará de estar vencido.':''}</p>
+      <div class="row" style="margin-top:12px"><button class="btn sec" style="flex:1" data-act="close">Cancelar</button><button class="btn" style="flex:1" data-act="extend-ok">Guardar nueva fecha</button></div>`;
+  } else if(m.type==='invite-name'){
+    h=`<h3>Nueva invitación ${hu(1)}</h3>
+      <label class="f" for="inv-name">¿Para quién es?</label>
+      <input type="text" id="inv-name" value="${esc(m.name||'')}" placeholder="Nombre de tu amigo">
+      ${m.error?`<div class="err">${m.error}</div>`:''}
+      <p class="muted" style="margin-top:8px">Lo verás en tus invitaciones pendientes y le aparecerá escrito al abrir el enlace.</p>
+      <div class="row" style="margin-top:12px"><button class="btn sec" style="flex:1" data-act="close">Cancelar</button><button class="btn" style="flex:1" data-act="invite-create">Crear enlace</button></div>`;
+  } else if(m.type==='remove'){
+    const f=friend(m.id), pend=DB().requests.filter(r=>r.friend===f.id&&r.status==='Pendiente');
+    h=`<h3>¿Quitarle el acceso a ${esc(f.name)}? ${hu(22)}</h3>
+      <p>Ya no podrá entrar ni pedir libros.${pend.length?` Se cancelará su pedido de ${pend.map(r=>`«${esc(book(r.book).title)}»`).join(', ')}.`:''} Su historial de préstamos se conserva.</p>
+      <div class="row" style="margin-top:12px"><button class="btn sec" style="flex:1" data-act="close">Cancelar</button><button class="btn danger" style="flex:1" data-act="remove-ok">Quitar acceso</button></div>`;
+  } else if(m.type==='reject'){
+    const r=DB().requests.find(x=>x.id===m.id), b=book(r.book);
+    h=`<h3>Rechazar el pedido de ${esc(friend(r.friend).name)} ${hu(11)}</h3>
+      <p class="muted">«${esc(b.title)}» volverá a estar disponible.</p>
+      <label class="f" for="why">Motivo <span class="muted" style="font-weight:400">(opcional, se le envía por correo)</span></label>
+      <textarea id="why" rows="3"></textarea>
+      <div class="row" style="margin-top:12px"><button class="btn sec" style="flex:1" data-act="close">Volver</button><button class="btn danger" style="flex:1" data-act="reject-ok">Rechazar</button></div>`;
+  } else if(m.type==='return'){
+    const l=DB().loans.find(x=>x.id===m.id), b=book(l.book);
+    h=`<h3>¿Volvió «${esc(b.title)}»? ${hu(12)}</h3>
+      <p>Se marcará como devuelto hoy, ${fmt(TODAY)}, por ${esc(friend(l.friend).name)}. El libro quedará disponible.</p>
+      <div class="row" style="margin-top:12px"><button class="btn sec" style="flex:1" data-act="close">Cancelar</button><button class="btn" style="flex:1" data-act="return-ok">Sí, ya volvió</button></div>`;
+  } else if(m.type==='retire'){
+    const b=book(m.id);
+    h=`<h3>¿Retirar «${esc(b.title)}»? ${hu(5)}</h3><p>Tus amigos dejarán de verlo en el catálogo. Su historial de préstamos se conserva y puedes reactivarlo cuando quieras.</p>
+      <div class="row" style="margin-top:12px"><button class="btn sec" style="flex:1" data-act="close">Cancelar</button><button class="btn danger" style="flex:1" data-act="retire-ok">Retirar</button></div>`;
+  } else if(m.type==='invite'){
+    h=`<h3>Invitación para ${esc(m.name)} lista ${hu(1)}</h3>
+      <p>Compártela solo con ${esc(m.name)}. Sirve una vez y vence en 7 días (${fmt(addDays(TODAY,7))}).</p>
+      <input type="text" readonly value="https://librero.app/i/${esc(m.code)}" aria-label="Enlace de invitación">
+      <div class="row" style="margin-top:12px"><button class="btn sec" style="flex:1" data-act="close">Cerrar</button><button class="btn" style="flex:1" data-act="copy">Copiar enlace</button></div>`;
+  } else if(m.type==='revoke'){
+    h=`<h3>¿Revocar la invitación? ${hu(17)}</h3><p>El enlace dejará de funcionar. Quien lo abra verá que ya no es válido.</p>
+      <div class="row" style="margin-top:12px"><button class="btn sec" style="flex:1" data-act="close">Cancelar</button><button class="btn danger" style="flex:1" data-act="revoke-ok">Revocar</button></div>`;
+  } else if(m.type==='cancel'){
+    const r=DB().requests.find(x=>x.id===m.id);
+    h=`<h3>¿Cancelar tu pedido? ${hu(9)}</h3><p>«${esc(book(r.book).title)}» volverá a estar disponible para los demás.</p>
+      <div class="row" style="margin-top:12px"><button class="btn sec" style="flex:1" data-act="close">Volver</button><button class="btn danger" style="flex:1" data-act="cancel-ok">Cancelar pedido</button></div>`;
+  }
+  return `<div class="ov" data-act="close-ov"><div class="sheet" data-pantalla="${m.type}" role="dialog" aria-modal="true">${h}</div></div>`;
+}
+
+/* ===================== Render ===================== */
+function nav(){
+  if(S.role==='guest') return '';
+  const pend=DB().requests.filter(r=>r.status==='Pendiente').length;
+  const over=DB().loans.filter(l=>loanStatus(l)==='Vencido').length;
+  const myOver=DB().loans.filter(l=>l.friend===ME_FRIEND&&loanStatus(l)==='Vencido').length;
+  const items = S.role==='owner'
+    ? [['panel','Inicio',over+pend],['catalog','Catálogo',0],['friends','Amigos',0]]
+    : [['catalog','Catálogo',0],['my','Mis pedidos',myOver]];
+  const cur = S.stack.length ? (S.stack[0].name) : S.route.name;
+  const noData = S.view==='loading'||S.view==='error'; // sin contadores si no hay datos (hallazgo 8)
+  return `<nav class="nav" aria-label="Navegación principal">${items.map(([k,t,n])=>`<button data-act="tab" data-tab="${k}" ${cur===k?'aria-current="page"':''}>${t}${n&&!noData?`<span class="dot">${n}</span>`:''}</button>`).join('')}</nav>`;
+}
+function render(){
+  const f=document.getElementById('frame');
+  f.className='frame '+(S.mode==='gris'?'gris':'')+(S.hu?'':' no-hu');
+  const r=S.route, fn=screens[r.name];
+  let sc=fn();
+  if(DATA_SCREENS.includes(r.name)){
+    if(S.view==='loading') sc={...sc,body:loadingBody()};
+    if(S.view==='error') sc={...sc,body:errorBody()};
+  }
+  const who = S.role==='owner'?'Dueño':S.role==='friend'?'Ana · amiga':'';
+  f.innerHTML = `<header class="top">${sc.back?'<button class="back" data-act="back" aria-label="Volver">←</button>':''}<h1>${sc.title}</h1><span class="who">${who}</span></header>
+    <main data-pantalla="${r.name}" data-estado="${S.view}">${sc.body}</main>${nav()}${modalHtml()}${S.toast?`<div class="toast" role="status">${S.toast}</div>`:''}`;
+  if(S.modal){const el=f.querySelector('.sheet input:not([readonly]), .sheet textarea, .sheet button'); if(el) el.focus()}
+  controls();
+}
+function controls(){
+  const seg=(id,key,opts)=>{document.getElementById(id).innerHTML=opts.map(([v,t])=>`<button data-c="${key}" data-v="${v}" aria-pressed="${S[key]===v}">${t}</button>`).join('')};
+  seg('c-role','role',[['owner','Dueño'],['friend','Amigo'],['guest','Sin cuenta']]);
+  seg('c-view','view',[['data','Con datos'],['empty','Vacío'],['loading','Cargando'],['error','Error']]);
+  seg('c-mode','mode',[['gris','Gris'],['visual','Visual']]);
+  document.getElementById('c-hu').checked=S.hu;
+}
+
+/* ===================== Eventos ===================== */
+document.querySelector('.proto').addEventListener('click',e=>{
+  const b=e.target.closest('[data-c]'); if(!b) return;
+  const k=b.dataset.c, v=b.dataset.v; S[k]=v;
+  if(k==='role'){S.stack=[];S.route=defaultRoute();S.modal=null}
+  render();
+});
+document.getElementById('c-hu').addEventListener('change',e=>{S.hu=e.target.checked;render()});
+document.getElementById('c-reset').addEventListener('click',()=>{reset(true);render();toast('Datos reiniciados')});
+
+const frame=document.getElementById('frame');
+frame.addEventListener('input',e=>{
+  if(e.target.id==='q'){S.q=e.target.value;document.getElementById('cat-list').innerHTML=catalogList()}
+  if(e.target.id==='due'&&S.modal){S.modal.dueText=e.target.value}
+  if(e.target.id==='inv-name'&&S.modal){S.modal.name=e.target.value}
+});
+frame.addEventListener('change',e=>{
+  if(e.target.id==='only'){S.onlyAvail=e.target.checked;document.getElementById('cat-list').innerHTML=catalogList()}
+  if(e.target.id==='showret'){S.showRetired=e.target.checked;document.getElementById('cat-list').innerHTML=catalogList()}
+});
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&S.modal){S.modal=null;render()} });
+frame.addEventListener('submit',e=>{
+  e.preventDefault(); const fm=e.target, k=fm.dataset.form, val=n=>fm.elements[n].value.trim();
+  const show=(id,bad)=>{document.getElementById(id).hidden=!bad;return bad};
+  const okEmail=s=>/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s);
+  if(k==='login'){ if(show('em-err',!okEmail(val('email')))) return; go('login-sent'); }
+  if(k==='invite'){
+    const b1=show('in-n-err',!val('name')), b2=show('in-e-err',!okEmail(val('email'))); if(b1||b2) return;
+    S.full.friends.push({id:uid('f'),name:val('name'),email:val('email')});
+    S.full.invites=S.full.invites.filter(i=>i.id!==val('inv')); // de un solo uso
+    S.role='friend'; S.stack=[]; S.route={name:'catalog'}; toast(`¡Bienvenida/o, ${esc(val('name'))}! Ya puedes pedir libros.`);
+  }
+  if(k==='book'){
+    const b1=show('ti-err',!val('title')), b2=show('au-err',!val('author')); if(b1||b2) return;
+    const data={title:val('title'),author:val('author'),isbn:val('isbn'),color:val('color')||'#7d6b57'};
+    if(S.route.id){Object.assign(book(S.route.id),data);back();toast('Cambios guardados')}
+    else{const nb={id:uid('b'),...data};DB().books.unshift(nb);S.stack=[];S.route={name:'catalog'};toast(`«${esc(nb.title)}» ya está en el catálogo, disponible`)}
+  }
+});
+frame.addEventListener('click',e=>{
+  const a=e.target.closest('[data-act]'), g=e.target.closest('[data-go]');
+  if(a && a.dataset.act==='close-ov'){ if(e.target===a){ S.modal=null; render(); } return; } // clic fuera de la hoja
+  if(a){ e.preventDefault(); act(a.dataset.act,a.dataset); return; }
+  if(g){ e.preventDefault(); go(g.dataset.go,g.dataset.id); }
+});
+
+function act(k,ds){
+  const db=DB();
+  switch(k){
+    case 'back': return back();
+    case 'tab': return tab(ds.tab);
+    case 'retry': S.view='data'; return render();
+    case 'close': S.modal=null; return render();
+    case 'enter': S.role=ds.role; S.stack=[]; S.route=defaultRoute(); return render();
+    case 'request': {
+      if(myOverdue()) return render(); // RN-011
+      db.requests.push({id:uid('r'),book:ds.id,friend:ME_FRIEND,created:TODAY,status:'Pendiente'});
+      return toast('Pedido enviado. Te avisaremos por correo cuando el dueño responda. '+mail('el dueño'));
+    }
+    case 'cancel': S.modal={type:'cancel',id:ds.id}; return render();
+    case 'cancel-ok': { db.requests.find(r=>r.id===S.modal.id).status='Cancelado'; S.modal=null; return toast('Pedido cancelado. El libro volvió a estar disponible.'); }
+    case 'approve': S.modal={type:'approve',id:ds.id}; return render();
+    case 'due': S.modal.dueText=toDMY(addDays(S.modal.base||TODAY,+ds.days)); S.modal.error=null; return render();
+    case 'approve-ok': {
+      const due=readDue(TODAY,'La fecha debe ser posterior a hoy.'); if(!due) return render();
+      const r=db.requests.find(x=>x.id===S.modal.id); r.status='Aprobado';
+      db.loans.push({id:uid('l'),book:r.book,friend:r.friend,start:TODAY,due});
+      S.modal=null; return toast(`Préstamo registrado hasta el ${fmt(due)}. `+mail(friend(r.friend).name.split(' ')[0]));
+    }
+    case 'reject': S.modal={type:'reject',id:ds.id}; return render();
+    case 'reject-ok': {
+      const r=db.requests.find(x=>x.id===S.modal.id); r.status='Rechazado'; r.reason=document.getElementById('why').value.trim();
+      S.modal=null; return toast('Pedido rechazado. '+mail(friend(r.friend).name.split(' ')[0]));
+    }
+    case 'return': S.modal={type:'return',id:ds.id}; return render();
+    case 'return-ok': { const l=db.loans.find(x=>x.id===S.modal.id); l.returned=TODAY; S.modal=null; return toast(`«${esc(book(l.book).title)}» está disponible otra vez.`); }
+    case 'extend': { const l=db.loans.find(x=>x.id===ds.id); S.modal={type:'extend',id:ds.id,base:l.due>TODAY?l.due:TODAY}; return render(); }
+    case 'extend-ok': {
+      const l=db.loans.find(x=>x.id===S.modal.id), wasOver=loanStatus(l)==='Vencido';
+      const due=readDue(S.modal.base, l.due>TODAY?`La nueva fecha debe ser posterior al ${fmt(l.due)}.`:'La fecha debe ser posterior a hoy.'); if(!due) return render();
+      l.due=due; S.modal=null;
+      return toast(`Nuevo plazo: ${fmt(due)}.${wasOver?' Ya no está vencido.':''} `+mail(friend(l.friend).name.split(' ')[0]));
+    }
+    case 'retire': S.modal={type:'retire',id:ds.id}; return render();
+    case 'retire-ok': { book(S.modal.id).retired=true; S.modal=null; S.stack=[]; S.route={name:'catalog'}; return toast('Libro retirado del catálogo. Su historial se conserva.'); }
+    case 'reactivate': { book(ds.id).retired=false; return toast(`«${esc(book(ds.id).title)}» vuelve a estar en el catálogo.`); }
+    case 'remove': S.modal={type:'remove',id:ds.id}; return render();
+    case 'remove-ok': {
+      const f=friend(S.modal.id); f.removed=true;
+      db.requests.filter(r=>r.friend===f.id&&r.status==='Pendiente').forEach(r=>r.status='Cancelado');
+      S.modal=null; S.stack=[]; S.route={name:'friends'}; return toast(`${esc(f.name)} ya no tiene acceso. Su historial se conserva.`);
+    }
+    case 'invite-new': S.modal={type:'invite-name'}; return render();
+    case 'invite-create': {
+      const name=document.getElementById('inv-name').value.trim();
+      if(!name){S.modal.error='Escribe el nombre de tu amigo.';return render()}
+      const code=Math.random().toString(36).slice(2,8); db.invites.push({id:uid('i'),name,code,created:TODAY,expires:addDays(TODAY,7)});
+      S.modal={type:'invite',code,name}; return render();
+    }
+    case 'copy': S.modal=null; return toast('Enlace copiado. Pégalo en WhatsApp o en un correo.');
+    case 'revoke': S.modal={type:'revoke',id:ds.id}; return render();
+    case 'revoke-ok': { db.invites=db.invites.filter(i=>i.id!==S.modal.id); S.modal=null; return toast('Invitación revocada.'); }
+    case 'isbn-demo': document.getElementById('isbn').value='9788420471839'; return act('isbn',{});
+    case 'isbn': {
+      const v=document.getElementById('isbn').value.replace(/[-\s]/g,''), msg=document.getElementById('isbn-msg');
+      if(S.view==='error'){msg.innerHTML='<div class="warn-msg" style="margin-top:8px">El servicio de libros no responde. Puedes llenar los datos a mano.</div>';return}
+      if(!/^(\d{9}[\dXx]|\d{13})$/.test(v)){msg.innerHTML='<div class="err">El ISBN debe tener 10 o 13 dígitos. También puedes llenar los datos a mano.</div>';return}
+      const hit=ISBN_API[v];
+      if(!hit){msg.innerHTML='<div class="warn-msg" style="margin-top:8px">No encontramos ese ISBN. Puedes llenar los datos a mano.</div>';return}
+      const fm=document.querySelector('[data-form=book]');
+      fm.elements.title.value=hit.title; fm.elements.author.value=hit.author; fm.elements.color.value=hit.color;
+      document.getElementById('cv').innerHTML=`<div style="width:90px">${cover(hit)}</div><p class="muted" style="margin-top:6px">Portada encontrada. Revisa los datos antes de guardar.</p>`;
+      msg.innerHTML='<div class="ok-msg" style="margin-top:8px">Encontramos el libro. Puedes editar los datos.</div>';
+      return;
+    }
+  }
+}
+
+reset(); render();
+document.addEventListener("validacion:rol",e=>{const m={"Dueño":"owner","Amigo (Ana)":"friend","Sin cuenta":"guest"};S.role=m[e.detail.rol]||S.role;reset(true);render();});
+</script>
+<script src="tareas.js"></script>
+<script src="kit/validacion.js"></script>
+</body>
+</html>
