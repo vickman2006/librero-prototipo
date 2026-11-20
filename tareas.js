@@ -6,7 +6,7 @@ window.TAREAS = {
     "Sin cuenta": "Un amigo te mandó una invitación para ver sus libros. Todavía no tienes cuenta en la app."
   },
   prueba: "librero-ronda-3",
-  enviar: "",
+  enviar: "https://script.google.com/macros/s/AKfycbza7mgESzmew__AFZtopQQbpr-EZc1ZV2R1VRVxEh1s2gAMtoPxWIjQSWq5yUxwUqDn/exec",
   enviarA: "una hoja de cálculo del equipo que hace la app",
   tareas: [
     { id: 1, rol: "Dueño", hu: "HU-014", texto: "¿Qué requiere tu atención hoy? Dilo sin entrar a ninguna pantalla aparte del inicio." },
